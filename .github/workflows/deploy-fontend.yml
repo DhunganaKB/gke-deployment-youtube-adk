@@ -48,7 +48,13 @@ jobs:
             --region ${{ env.REGION }} \
             --project ${{ env.PROJECT_ID }}
 
-      - name: Update frontend image
+      # Apply manifests first — creates Deployment + Service if they don't exist yet
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f k8s/frontend-deployment.yaml
+          kubectl apply -f k8s/frontend-service.yaml
+
+      - name: Update frontend image to current git SHA
         run: |
           kubectl set image deployment/youtube-analyst-frontend \
             frontend=${{ env.IMAGE }}:${{ github.sha }} \

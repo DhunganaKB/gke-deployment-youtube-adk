@@ -58,7 +58,16 @@ jobs:
             --region ${{ env.REGION }} \
             --project ${{ env.PROJECT_ID }}
 
-      - name: Update image in deployment
+      # Apply manifests first — creates Deployment + Service if they don't exist yet,
+      # updates them if already exist (idempotent). Safe to run on every deploy.
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/backend-deployment.yaml
+          kubectl apply -f k8s/backend-service.yaml
+
+      # Update just the image to the exact git SHA for full traceability
+      - name: Update image to current git SHA
         run: |
           kubectl set image deployment/youtube-analyst-backend \
             backend=${{ env.IMAGE }}:${{ github.sha }} \
