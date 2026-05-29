@@ -1,0 +1,36 @@
+# k8s/frontend-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: youtube-analyst-frontend
+  namespace: youtube-analyst
+  labels:
+    app: youtube-analyst-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: youtube-analyst-frontend
+  template:
+    metadata:
+      labels:
+        app: youtube-analyst-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: us-central1-docker.pkg.dev/deve-487713/youtube-analyst/frontend:latest
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10

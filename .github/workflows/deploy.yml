@@ -1,4 +1,5 @@
-name: Build and Deploy to Cloud Run
+# .github/workflows/deploy.yml
+name: Build and Deploy Backend to GKE
 
 on:
   push:
@@ -8,42 +9,37 @@ on:
       - 'Dockerfile'
       - 'pyproject.toml'
       - 'uv.lock'
-      - 'uv.toml'
-  workflow_dispatch:   # allow manual trigger from GitHub UI
+      - 'k8s/backend-deployment.yaml'
+  workflow_dispatch:
 
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: ${{ secrets.GCP_REGION }}
-  SERVICE_NAME: youtube-analyst
-  IMAGE: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/youtube-analyst/app
+  PROJECT_ID:   deve-487713
+  REGION:       us-central1
+  CLUSTER:      youtube-analyst-cluster
+  NAMESPACE:    youtube-analyst
+  IMAGE:        us-central1-docker.pkg.dev/deve-487713/youtube-analyst/app
 
 jobs:
   build-and-deploy:
-    name: Build, Push, Deploy
     runs-on: ubuntu-latest
-
     steps:
-      # ── 1. Checkout ──────────────────────────────────────────────────────────
-      - name: Checkout source
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # ── 2. Authenticate to GCP ───────────────────────────────────────────────
-      - name: Authenticate to Google Cloud
+      - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ secrets.GKE_SA_KEY }}
 
-      # ── 3. Set up gcloud CLI ─────────────────────────────────────────────────
-      - name: Set up Cloud SDK
+      - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          project_id: ${{ env.PROJECT_ID }}
+          install_components: gke-gcloud-auth-plugin
 
-      # ── 4. Configure Docker to push to Artifact Registry ─────────────────────
-      - name: Configure Docker for Artifact Registry
+      - name: Configure Docker
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-      # ── 5. Build Docker image (tagged with git SHA + latest) ─────────────────
       - name: Build Docker image
         run: |
           docker build \
@@ -51,38 +47,25 @@ jobs:
             --tag ${{ env.IMAGE }}:latest \
             .
 
-      # ── 6. Push both tags to Artifact Registry ───────────────────────────────
       - name: Push Docker image
         run: |
           docker push ${{ env.IMAGE }}:${{ github.sha }}
           docker push ${{ env.IMAGE }}:latest
 
-      # ── 7. Deploy to Cloud Run ────────────────────────────────────────────────
-      - name: Deploy to Cloud Run
+      - name: Get GKE credentials
         run: |
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image ${{ env.IMAGE }}:${{ github.sha }} \
+          gcloud container clusters get-credentials ${{ env.CLUSTER }} \
             --region ${{ env.REGION }} \
-            --project ${{ env.PROJECT_ID }} \
-            --platform managed \
-            --service-account airbnb-rag-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com \
-            --allow-unauthenticated \
-            --memory 2Gi \
-            --cpu 2 \
-            --timeout 300 \
-            --min-instances 0 \
-            --max-instances 10 \
-            --set-env-vars "GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }}" \
-            --set-env-vars "GOOGLE_CLOUD_LOCATION=global" \
-            --set-env-vars "GOOGLE_GENAI_USE_VERTEXAI=1" \
-            --set-env-vars "YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}"
+            --project ${{ env.PROJECT_ID }}
 
-      # ── 8. Print the live service URL ────────────────────────────────────────
-      - name: Print service URL
+      - name: Update image in deployment
         run: |
-          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
-            --region ${{ env.REGION }} \
-            --project ${{ env.PROJECT_ID }} \
-            --format "value(status.url)")
-          echo "Service deployed at: $URL"
-          echo "service_url=$URL" >> $GITHUB_OUTPUT
+          kubectl set image deployment/youtube-analyst-backend \
+            backend=${{ env.IMAGE }}:${{ github.sha }} \
+            --namespace ${{ env.NAMESPACE }}
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/youtube-analyst-backend \
+            --namespace ${{ env.NAMESPACE }} \
+            --timeout=300s

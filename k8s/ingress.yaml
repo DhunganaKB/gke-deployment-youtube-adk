@@ -1,0 +1,36 @@
+# k8s/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: youtube-analyst-ingress
+  namespace: youtube-analyst
+  annotations:
+    kubernetes.io/ingress.class: "gce"           # GKE's built-in L7 load balancer
+    kubernetes.io/ingress.global-static-ip-name: "youtube-analyst-ip"
+    networking.gke.io/managed-certificates: "youtube-analyst-cert"
+spec:
+  rules:
+    - host: your-domain.com                      # replace with your domain
+      http:
+        paths:
+          - path: /chat
+            pathType: Prefix
+            backend:
+              service:
+                name: youtube-analyst-backend
+                port:
+                  number: 80
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: youtube-analyst-backend
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: youtube-analyst-frontend
+                port:
+                  number: 80

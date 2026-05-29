@@ -1,0 +1,13 @@
+# k8s/backend-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: youtube-analyst-backend
+  namespace: youtube-analyst
+spec:
+  selector:
+    app: youtube-analyst-backend
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP               # internal only — Ingress routes to this

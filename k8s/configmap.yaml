@@ -1,0 +1,11 @@
+# k8s/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: youtube-analyst-config
+  namespace: youtube-analyst
+data:
+  GOOGLE_CLOUD_PROJECT:    "deve-487713"
+  GOOGLE_CLOUD_LOCATION:   "global"
+  GOOGLE_GENAI_USE_VERTEXAI: "1"
+  GOOGLE_GENAI_LOCATION:   "global"

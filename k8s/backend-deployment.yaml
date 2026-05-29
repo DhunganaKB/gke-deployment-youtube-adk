@@ -1,0 +1,59 @@
+# k8s/backend-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: youtube-analyst-backend
+  namespace: youtube-analyst
+  labels:
+    app: youtube-analyst-backend
+spec:
+  replicas: 2                        # 2 pods for high availability
+  selector:
+    matchLabels:
+      app: youtube-analyst-backend
+  template:
+    metadata:
+      labels:
+        app: youtube-analyst-backend
+    spec:
+      serviceAccountName: youtube-analyst-ksa   # Workload Identity
+      containers:
+        - name: backend
+          image: us-central1-docker.pkg.dev/deve-487713/youtube-analyst/app:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: youtube-analyst-config    # non-secret env vars
+          env:
+            - name: YOUTUBE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: youtube-analyst-secrets
+                  key: YOUTUBE_API_KEY
+          resources:
+            requests:
+              cpu: "500m"          # 0.5 vCPU guaranteed
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"         # max 2 vCPU
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: youtube-analyst-backend
