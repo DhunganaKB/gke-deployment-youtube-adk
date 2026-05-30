@@ -1,4 +1,6 @@
 # k8s/backend-service.yaml
+# Exposes the FastAPI backend externally via a GCP Load Balancer.
+# External IP: 35.253.253.4  →  DNS: api.kamalgke.com
 apiVersion: v1
 kind: Service
 metadata:
@@ -10,4 +12,5 @@ spec:
   ports:
     - port: 80
       targetPort: 8080
-  type: ClusterIP               # internal only — Ingress routes to this
+  type: LoadBalancer    # LoadBalancer = gets an external GCP IP
+                        # ClusterIP = internal only (no external access)

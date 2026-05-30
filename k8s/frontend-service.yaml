@@ -1,4 +1,6 @@
 # k8s/frontend-service.yaml
+# Exposes the nginx frontend externally via a GCP Load Balancer.
+# External IP: 104.198.204.183  →  DNS: app.kamalgke.com
 apiVersion: v1
 kind: Service
 metadata:
@@ -10,4 +12,6 @@ spec:
   ports:
     - port: 80
       targetPort: 8080
-  type: LoadBalancer
+  type: LoadBalancer    # LoadBalancer = gets an external GCP IP
+                        # IMPORTANT: must stay LoadBalancer — if changed to
+                        # ClusterIP the external IP is lost and DNS breaks

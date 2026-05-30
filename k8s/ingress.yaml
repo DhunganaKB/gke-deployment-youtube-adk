@@ -1,32 +1,54 @@
 # k8s/ingress.yaml
+#
+# NOTE: This Ingress is an ALTERNATIVE to the current LoadBalancer setup.
+# Currently the app uses two separate LoadBalancer services:
+#   api.kamalgke.com  → youtube-analyst-backend  (LoadBalancer, IP: 35.253.253.4)
+#   app.kamalgke.com  → youtube-analyst-frontend (LoadBalancer, IP: 104.198.204.183)
+#
+# This Ingress provides a SINGLE entry point with one GCP L7 Load Balancer,
+# routing traffic by hostname and path. To activate it:
+#   1. Change both services back to type: ClusterIP
+#   2. Reserve a static IP: gcloud compute addresses create youtube-analyst-ip --global --project=deve-487713
+#   3. kubectl apply -f k8s/ingress.yaml
+#   4. Wait ~5 min for GCP to provision the L7 LB and get the IP
+#   5. Update DNS A records for api.kamalgke.com and app.kamalgke.com to the new IP
+#
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: youtube-analyst-ingress
   namespace: youtube-analyst
   annotations:
-    kubernetes.io/ingress.class: "gce"           # GKE's built-in L7 load balancer
+    # Use GKE's built-in L7 HTTP(S) Load Balancer
+    kubernetes.io/ingress.class: "gce"
+
+    # Reserve a static IP first:
+    # gcloud compute addresses create youtube-analyst-ip --global --project=deve-487713
     kubernetes.io/ingress.global-static-ip-name: "youtube-analyst-ip"
+
+    # GKE Managed Certificate — auto-provisions TLS for the listed domains
+    # Requires the domains to already resolve to the static IP via DNS
     networking.gke.io/managed-certificates: "youtube-analyst-cert"
 spec:
   rules:
-    - host: your-domain.com                      # replace with your domain
+    # ── Backend API ──────────────────────────────────────────────────────────
+    # All requests to api.kamalgke.com go to the backend service
+    - host: api.kamalgke.com
       http:
         paths:
-          - path: /chat
+          - path: /
             pathType: Prefix
             backend:
               service:
                 name: youtube-analyst-backend
                 port:
                   number: 80
-          - path: /health
-            pathType: Prefix
-            backend:
-              service:
-                name: youtube-analyst-backend
-                port:
-                  number: 80
+
+    # ── Frontend UI ──────────────────────────────────────────────────────────
+    # All requests to app.kamalgke.com go to the frontend service
+    - host: app.kamalgke.com
+      http:
+        paths:
           - path: /
             pathType: Prefix
             backend:
@@ -34,3 +56,17 @@ spec:
                 name: youtube-analyst-frontend
                 port:
                   number: 80
+
+---
+# GKE Managed Certificate resource
+# GKE automatically provisions and renews a TLS certificate for these domains.
+# DNS must resolve to the Ingress IP BEFORE the certificate can be issued.
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: youtube-analyst-cert
+  namespace: youtube-analyst
+spec:
+  domains:
+    - api.kamalgke.com
+    - app.kamalgke.com
